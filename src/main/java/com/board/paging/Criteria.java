@@ -44,5 +44,6 @@ public class Criteria {
 
 		return uriComponents.toUriString();
 	}
+	
 
 }
