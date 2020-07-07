@@ -4,6 +4,37 @@
 		<title>this is view page</title>
 	</th:block>
 
+	<th:block layout:fragment="modal">
+		<div id="commentModal" class="modal fade" tabindex="-1" role="dialog" aria-labelledby="commentModalLabel" aria-hidden="true">
+		    <div class="modal-dialog" role="document">
+		        <div class="modal-content">
+		            <div class="modal-header">
+		                <button type="button" class="close" data-dismiss="modal" aria-label="Close">
+		                <span aria-hidden="true">&times;</span>
+		                </button>
+		            </div>
+		            <div class="modal-body">
+		                <form>
+		                    <div class="form-group">
+		                        <label for="modalWriter" class="col-form-label">작성자</label>
+		                        <input type="text" id="modalWriter" class="form-control" placeholder="작성자를 입력해 주세요." />
+		                    </div>
+		                    <div class="form-group">
+		                        <label for="modalContent" class="col-form-label">내용</label>
+		                        <textarea id="modalContent" class="form-control" placeholder="내용을 입력해 주세요."></textarea>
+		                    </div>
+		                </form>
+		            </div>
+		            <div class="modal-footer">
+		                <button type="button" id="btnModalCancel" class="btn btn-default waves-effect waves-light" data-dismiss="modal">취소하기</button>
+		                <button type="button" id="btnCommentUpdate" class="btn btn-primary waves-effect waves-light" onclick="updateComment()">수정하기</button>
+		                <button type="button" id="btnCommentDelete" class="btn btn-danger waves-effect waves-light">삭제하기</button>
+		            </div>
+		        </div>
+		    </div>
+		</div>
+	</th:block>
+
 	<th:block layout:fragment="content">
 		<div class="card-content">
 			<form class="form-horizontal form-view" th:object="${board}">
@@ -62,24 +93,14 @@
 
 				<form class="form-horizontal form-view">
 					<div class="input-group margin-bottom-20">
-						<input type="email" class="form-control" placeholder="">
-						<div class="input-group-btn"><button type="button" class="btn waves-effect waves-light"><i class="fa fa-commenting" aria-hidden="true"></i></button></div>
-						<!-- /.input-group-btn -->
+						<input type="text" id="content" class="form-control" />
+						<div class="input-group-btn">
+							<button type="button" class="btn waves-effect waves-light" th:onclick="insertComment([[ ${board.idx} ]])">
+							<i class="fa fa-commenting" aria-hidden="true"></i>
+							</button>
+						</div>
 					</div>
-					<ul class="notice-list">
-						<li>
-							<span class="name">Betty Simmons</span>
-							<span class="desc">There are new settings available</span>
-							<span class="time">2019.03.26</span>
-							<button type="button" class="btn btn-xs btn-circle"><i class="fa fa-close" aria-hidden="true"></i></button>
-						</li>
-						<li>
-							<span class="name">Betty Kim</span>
-							<span class="desc">There are new settings available</span>
-							<span class="time">2019.03.15</span>
-							<button type="button" class="btn btn-xs btn-circle"><i class="fa fa-close" aria-hidden="true"></i></button>
-						</li>
-					</ul>
+					<ul class="notice-list"></ul>
 				</form>
 			</div>
 			<!-- /.card-content -->
@@ -114,6 +135,118 @@
 					document.dataForm.submit();
 				}
 			}
+
+			function openModal(idx, writer, content) {
+
+				$("#commentModal").modal("toggle");
+
+				document.getElementById("modalWriter").value = writer;
+				document.getElementById("modalContent").value = content;
+
+				document.getElementById("btnCommentUpdate").setAttribute("onclick", "updateComment("+ idx +")");
+				document.getElementById("btnCommentDelete").setAttribute("onclick", "deleteComment("+ idx +")");
+			}
+			
+			function insertComment(boardIdx) {
+
+				var content = document.getElementById("content");
+				if (isEmpty(content.value) == true) {
+					content.setAttribute("placeholder", "댓글을 입력해 주세요.");
+					content.focus();
+					return false;
+				}
+
+				var uri = /*[[ @{/comments} ]]*/;
+				var headers = {"Content-Type": "application/json", "X-HTTP-Method-Override": "POST"};
+				var params = {"boardIdx": boardIdx, "content": content.value, "writer": "관리자"};
+
+				$.ajax({
+					url: uri,
+					type: "POST",
+					headers: headers,
+					dataType: "json",
+					data: JSON.stringify(params),
+					success: function(response) {
+						if (response.result == false) {
+							alert("댓글 등록에 실패하였습니다.");
+							return false;
+						}
+
+						printCommentList();
+						content.value = "";
+					},
+					error: function(xhr, status, error) {
+						alert("에러가 발생하였습니다.");
+						return false;
+					}
+				});
+			}
+			
+			function updateComment(idx) {
+
+				var writer = document.getElementById("modalWriter");
+				var content = document.getElementById("modalContent");
+
+				var uri = [[ @{/comments/} ]] + idx;
+				var headers = {"Content-Type": "application/json", "X-HTTP-Method-Override": "PATCH"};
+				var params = {"idx": idx, "writer": writer.value, "content": content.value};
+
+				$.ajax({
+					url: uri,
+					type: "PATCH",
+					headers: headers,
+					dataType: "json",
+					data: JSON.stringify(params),
+					success: function(response) {
+						if (response.result == false) {
+							alert("댓글 수정에 실패하였습니다.");
+							return false;
+						}
+
+						printCommentList();
+						$("#commentModal").modal("hide");
+					},
+					error: function(xhr, status, error) {
+						alert("에러가 발생하였습니다.");
+						return false;
+					}
+				});
+			}
+			
+			function printCommentList() {
+
+				var uri = /*[[ @{/comments/} + ${board.idx} ]]*/;
+
+				$.get(uri, function(response) {
+					if (isEmpty(response) == false) {
+						var commentsHtml = "";
+
+						$(response.commentList).each(function(idx, comment) {
+							/* 백틱 기호 (특수문자 물결 아래)
+							commentsHtml += 뒤의 기호는 따옴표( ' )가 아닌 백틱( ` ) 기호인데요, 
+							해당 기호를 사용하면 여러 개의 플러스( + )와 따옴표( ' )를 사용하지 않아도 복잡한 형태의 문자열을 만들 수 있습니다.
+							백틱 기호 사이에서는 ${ } 표현식을 사용하여 자바스크립트의 변수나 함수를 사용할 수 있습니다.
+							*/
+							commentsHtml += `
+								<li>
+									<span class="name">${comment.writer}</span>
+									<span class="desc">${comment.content}</span>
+									<span class="time">${moment(comment.insertTime).format('YYYY-MM-DD HH:mm:ss')}</span>
+									<button type="button" onclick="openModal(${comment.idx}, '${comment.writer}', '${comment.content}' )" class="btn btn-xs btn-circle"><i class="glyphicon glyphicon-pencil" aria-hidden="true"></i></button>
+								</li>
+							`;
+						});
+
+						$(".notice-list").html(commentsHtml);
+					}
+				}, "json");
+			}
+			
+			
+			$(function() {
+				printCommentList();
+			});
+			
 			/*[- end of function -]*/
 
 			/*]]>*/
